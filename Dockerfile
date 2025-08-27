@@ -22,3 +22,28 @@ COPY . .
 
 # Install dependencies inside container (skip scripts to avoid artisan issue)
 RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
+
+# Set Apache DocumentRoot to Laravel's public directory
+RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf \
+    && sed -i 's|/var/www/|/var/www/html/public|g' /etc/apache2/apache2.conf
+
+# Add proper Directory permissions for Laravel public folder
+RUN echo '<Directory /var/www/html/public>\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>' > /etc/apache2/conf-available/laravel.conf \
+    && a2enconf laravel
+
+# Fix permissions for Laravel
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Expose port
+EXPOSE 80
+
+# Run artisan commands on container start, then Apache
+CMD php artisan config:clear && \
+    php artisan cache:clear && \
+    php artisan route:clear && \
+    apache2-foreground
